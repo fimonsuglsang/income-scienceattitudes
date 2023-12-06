@@ -1,0 +1,728 @@
+---
+title: "Is science for the rich and powerful? Supplementary materials"
+author: "Author temporarily anonymized"
+date: "`r Sys.Date()`"
+output: 
+  html_document: 
+    theme: "readable"
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F, message = F, ft.htmlscroll = F)
+source("scripts/clean.r")
+load(file = "objects/lv2regs.rdata")
+load(file = "objects/indregio.rdata")
+load(file = "objects/cregs.rdata")
+library(tidyverse)
+library(modelsummary)
+library(flextable)
+library(fixest)
+library(lmerTest)
+library(patchwork)
+library(factoextra)
+library(psych)
+library(kableExtra)
+
+clist <- contdata %>% 
+  select(country) %>% 
+  distinct()
+
+```
+
+
+# Index construction
+
+```{r trust investigation}
+
+# loadings party, factor ----------------------------------------------------------
+
+fa(
+  cor(
+    contdata %>%  
+      select(i1, i2, i3, i4, i5, i6, i7) %>% drop_na(), 
+    use = "pairwise.complete.obs"
+  ),
+  1
+) %>% 
+  loadings() %>% 
+  unclass() %>% 
+  as_tibble() %>% 
+  rownames_to_column() %>% 
+  pivot_wider(names_from = "rowname", values_from = "MR1") %>% 
+  mutate(country = "all") -> faloadies7
+
+
+for(i in 1:145){
+  
+  fa(
+    cor(
+      contdata %>%  
+        filter(country == as.character(clist[i,])) %>% 
+        select(i1, i2, i3, i4, i5, i6, i7) %>% 
+        drop_na(), 
+      use = "pairwise.complete.obs"
+    ),
+    1
+  ) -> fa
+  
+  bind_rows(
+    faloadies7,
+    loadings(fa) %>% 
+      unclass() %>% 
+      as_tibble() %>% 
+      rownames_to_column() %>% 
+      pivot_wider(names_from = "rowname", values_from = "MR1") %>% 
+      mutate(country = as.character(clist[i,]))
+  ) -> faloadies7
+  
+}
+
+
+
+fa(
+  cor(
+    contdata %>%  
+      select(i1, i3, i4, i5) %>% drop_na(), 
+    use = "pairwise.complete.obs"
+  ),
+  1
+) %>% 
+  loadings() %>% 
+  unclass() %>% 
+  as_tibble() %>% 
+  rownames_to_column() %>% 
+  pivot_wider(names_from = "rowname", values_from = "MR1") %>% 
+  mutate(country = "all") -> faloadies4
+
+
+for(i in 1:145){
+  
+  fa(
+    cor(
+      contdata %>%  
+        filter(country == as.character(clist[i,])) %>% 
+        select(i1, i3, i4, i5) %>% 
+        drop_na(), 
+      use = "pairwise.complete.obs"
+    ),
+    1
+  ) -> fa
+  
+  bind_rows(
+    faloadies4,
+    loadings(fa) %>% 
+      unclass() %>% 
+      as_tibble() %>% 
+      rownames_to_column() %>% 
+      pivot_wider(names_from = "rowname", values_from = "MR1") %>% 
+      mutate(country = as.character(clist[i,]))
+  ) -> faloadies4
+  
+}
+
+
+
+# loadings party, PCA ----------------------------------------------------
+
+
+princomp(
+  contdata %>%  
+    select(i1, i2, i3, i4, i5, i6, i7) %>%
+    drop_na(), 
+  cor = TRUE 
+) %>% 
+  loadings() %>% 
+  unclass() %>% 
+  as_tibble() %>% 
+  rownames_to_column() %>% 
+  select(1, 2) %>% 
+  pivot_wider(names_from = "rowname", values_from = "Comp.1") %>% 
+  mutate(country = "all") -> pcaloadies7
+
+for(i in 1:145){
+  
+  princomp(
+    contdata %>% 
+      filter(country == as.character(clist[i,])) %>% 
+      select(i1, i2, i3, i4, i5, i6, i7) %>%
+      drop_na(), 
+    cor = TRUE 
+  ) -> pca
+  
+  bind_rows(
+    pcaloadies7,
+    loadings(pca) %>% 
+      unclass() %>% 
+      as_tibble() %>% 
+      rownames_to_column() %>% 
+      select(1, 2) %>% 
+      pivot_wider(names_from = "rowname", values_from = "Comp.1") %>% 
+      mutate(country = as.character(clist[i,]))
+  ) -> pcaloadies7
+  
+}
+
+
+princomp(
+  contdata %>%  
+    select(i1, i3, i4, i5) %>%
+    drop_na(), 
+  cor = TRUE 
+) %>% 
+  loadings() %>% 
+  unclass() %>% 
+  as_tibble() %>% 
+  rownames_to_column() %>% 
+  select(1, 2) %>% 
+  pivot_wider(names_from = "rowname", values_from = "Comp.1") %>% 
+  mutate(country = "all") -> pcaloadies4
+
+for(i in 1:145){
+  
+  princomp(
+    contdata %>% 
+      filter(country == as.character(clist[i,])) %>% 
+      select(i1, i3, i4, i5) %>%
+      drop_na(), 
+    cor = TRUE 
+  ) -> pca
+  
+  bind_rows(
+    pcaloadies4,
+    loadings(pca) %>% 
+      unclass() %>% 
+      as_tibble() %>% 
+      rownames_to_column() %>% 
+      select(1, 2) %>% 
+      pivot_wider(names_from = "rowname", values_from = "Comp.1") %>% 
+      mutate(country = as.character(clist[i,]))
+  ) -> pcaloadies4
+  
+}
+
+rm(fa, pca)
+
+# the figure --------------------------------------------------------------
+
+
+
+bind_rows(
+  
+  pcaloadies7 %>%
+    pivot_longer(1:7) %>%
+    mutate(name = paste0("i", name)) %>% 
+    mutate(f = "All items", a = "Principal Component"),
+  
+  pcaloadies4 %>%
+    pivot_longer(1:4) %>%
+    mutate(name = case_when(as.numeric(name)>1 ~ as.numeric(name)+1, T ~ 1)) %>% 
+    mutate(name = paste0("i", name)) %>% 
+    mutate(f = "Selected items", a = "Principal Component"),
+  
+  faloadies7 %>%
+    pivot_longer(1:7) %>%
+    mutate(name = paste0("i", name)) %>% 
+    mutate(f = "All items", a = "Factor"),
+  
+  faloadies4 %>%
+    pivot_longer(1:4) %>%
+    mutate(name = case_when(as.numeric(name)>1 ~ as.numeric(name)+1, T ~ 1)) %>% 
+    mutate(name = paste0("i", name)) %>% 
+    mutate(f = "Selected items", a = "Factor")
+  
+) -> loadies
+  
+ggplot(loadies) +
+  
+  geom_point(
+    data = . %>% filter(country != "all"),
+    aes(y = name, x = value, group = country),
+    position = position_dodge(.2),
+    alpha = .2
+  ) +
+  
+  geom_errorbar(
+    data = . %>%  filter(country == "all"),
+    aes(y = name, xmin = value, xmax = value, group = f),
+    width = .5,
+    size = 1) +
+  
+  geom_text(
+    data = . %>%  filter(country == "all"),
+    aes(y = name, x = value, label = round(value, digits = 2), group = f),
+    vjust = -.5,
+    hjust = 0
+  ) +
+  
+  facet_grid(a~f, space = "free", scales = "free") +
+  
+  ylab("Indicator") +
+  xlab("Loading") +
+  
+  scale_y_discrete(limits=rev) +
+  scale_x_continuous(breaks = seq(0,1,.1)) +
+  jtools::theme_nice(legend.pos = "none") +
+  theme(panel.grid.major.y = element_blank())
+
+
+```
+
+```{r items alpha}
+
+contdata %>% 
+  select(i1, i3, i4, i5) %>% 
+  psych::alpha()
+
+```
+
+
+# Characteristics of variables
+
+```{r cont vars}
+contdata %>% 
+  select(trust, subcome, relcome,age) %>%
+  
+  rename("Trust (see section above)" = trust,
+         "Subjective income: 'Which one of these phrases comes closes to your own feelings about your household's income these days?'" = subcome,
+         "Relative income: Per Capita Income Quintiles" = relcome,
+         "Age: 'Please tell me your age'" = age
+  ) %>%   
+  
+  datasummary_skim(histogram = F)
+```
+
+```{r cat vars}
+merged %>% 
+  select(subcome, relcome, sex, edu,emp) %>% 
+  rename("Subjective income: 'Which one of these phrases comes closes to your own feelings about your household's income these days?'" = subcome,
+         "Relative income: Per Capita Income Quintiles" = relcome,
+         "Sex" = sex,
+         "Education: General education background" = edu,
+         "Employment: Employment status" = emp
+  ) %>%   
+  
+  datasummary_skim(type = "categorical")
+
+```
+
+```{r lv2 vars}
+lv2 %>% 
+  select(-country, -region, -code, -round, -vtrust) %>% 
+  
+  rename(
+    "(World Bank) GDP per capita" = gdppc,
+    "(World Bank) Infant mortality" = infmort,
+    "(World Bank) GINI coefficient" = gini,
+    "(World Bank) Science spending" = scispend,
+    "(VDEM) Democracy score, v2x_polyarchy" = v2x_polyarchy,
+    "Aggregate trust" = aggtrust,
+    "(World Bank) Science spending, logged" = loggdp,
+    "(World Bank) Infant mortality, logged" = logmort
+  ) %>% 
+  
+  datasummary_skim(histogram = F)
+```
+
+
+# Income as ordinal
+
+```{r as ordinal}
+
+left_join(merged, whoregions) %>% 
+  mutate(trust = (trust-mean(trust, na.rm = T))/sd(trust, na.rm = T)) -> tempdata
+
+modelsummary(
+  models = list(
+    "relative" = feols(data = tempdata, 
+                       trust~sex+age+edu+emp+round+relcome|country, se = "cluster"),
+    "subjective" = feols(data = tempdata, 
+                         trust~sex+age+edu+emp+round+subcome|country, se = "cluster"),
+    "both" = feols(data = tempdata, 
+                   trust~sex+age+edu+emp+round+relcome+subcome|country, se = "cluster")
+  ),
+  fmt = 2,
+  stars = T,
+  
+)
+
+```
+
+# Split on dimension of trust
+
+```{r dimensions}
+
+left_join(contdata, whoregions) %>% 
+  mutate(
+    direct = ((i3-mean(i3, na.rm = T))/sd(i3, na.rm = T))*-1,
+    expertice = ((i4-mean(i4, na.rm = T))/sd(i4, na.rm = T))*-1,
+    benevolence = ((i5-mean(i5, na.rm = T))/sd(i5, na.rm = T))*-1,
+    integrity = ((i_integrity-mean(i_integrity, na.rm = T))/sd(i_integrity, na.rm = T))*-1
+    ) -> tempdata
+
+modelsummary(
+  title = "direct",
+  models = list(
+    "relative" = feols(data = tempdata, 
+                       direct~sex+age+edu+emp+round+relcome|country, se = "cluster"),
+    "subjective" = feols(data = tempdata, 
+                         direct~sex+age+edu+emp+round+subcome|country, se = "cluster"),
+    "both" = feols(data = tempdata, 
+                   direct~sex+age+edu+emp+round+relcome+subcome|country, se = "cluster")
+  ),
+  fmt = 2,
+  stars = T
+)
+
+modelsummary(
+  title = "expertice",
+  models = list(
+    "relative" = feols(data = tempdata, 
+                       expertice~sex+age+edu+emp+round+relcome|country, se = "cluster"),
+    "subjective" = feols(data = tempdata, 
+                         expertice~sex+age+edu+emp+round+subcome|country, se = "cluster"),
+    "both" = feols(data = tempdata, 
+                   expertice~sex+age+edu+emp+round+relcome+subcome|country, se = "cluster")
+  ),
+  fmt = 2,
+  stars = T
+)
+
+modelsummary(
+  title = "benevolence",
+  models = list(
+    "relative" = feols(data = tempdata, 
+                       benevolence~sex+age+edu+emp+round+relcome|country, se = "cluster"),
+    "subjective" = feols(data = tempdata, 
+                         benevolence~sex+age+edu+emp+round+subcome|country, se = "cluster"),
+    "both" = feols(data = tempdata, 
+                   benevolence~sex+age+edu+emp+round+relcome+subcome|country, se = "cluster")
+  ),
+  fmt = 2,
+  stars = T
+)
+
+modelsummary(
+  title = "integrity", 
+  models = list(
+    "relative" = feols(data = tempdata, 
+                       integrity~sex+age+edu+emp+round+relcome|country, se = "cluster"),
+    "subjective" = feols(data = tempdata, 
+                         integrity~sex+age+edu+emp+round+subcome|country, se = "cluster"),
+    "both" = feols(data = tempdata, 
+                   integrity~sex+age+edu+emp+round+relcome+subcome|country, se = "cluster")
+  ),
+  fmt = 2,
+  stars = T
+)
+
+```
+
+# Table 1, random slopes for income
+
+```{r random slopes table 1}
+
+modelsummary::modelsummary(
+  models = list(
+    "1" = mixed1,
+    "2" = mixed2,
+    "3" = mixed3
+  ),
+  fmt = 2,
+  stars = T,
+  
+)
+```
+
+# Fixed effect regression, region-wise
+
+```{r fe reg regionwise}
+
+whoregions %>% select(region) %>%  distinct() -> rlist
+
+left_join(contdata, whoregions) %>% 
+  filter(region == paste(rlist[1,])) %>% 
+  mutate(trust = (trust-mean(trust, na.rm = T))/sd(trust, na.rm = T)) %>% 
+  mutate(jointcome = (relcome + subcome)/2) -> tempdata
+
+modelsummary::modelsummary(
+  models = list(
+    "relative" = feols(data = tempdata, 
+                       trust~sex+age+edu+emp+round+relcome|country, se = "cluster"),
+    "subjective" = feols(data = tempdata, 
+                         trust~sex+age+edu+emp+round+subcome|country, se = "cluster"),
+    "both" = feols(data = tempdata, 
+                   trust~sex+age+edu+emp+round+relcome+subcome|country, se = "cluster")
+  ),
+  fmt = 2,
+  stars = T,
+  title = paste(rlist[1,]),
+  
+)
+
+left_join(contdata, whoregions) %>% 
+  filter(region == paste(rlist[2,])) %>% 
+  mutate(trust = (trust-mean(trust, na.rm = T))/sd(trust, na.rm = T)) %>% 
+  mutate(jointcome = (relcome + subcome)/2) -> tempdata
+
+modelsummary::modelsummary(
+  models = list(
+    "relative" = feols(data = tempdata, 
+                       trust~sex+age+edu+emp+round+relcome|country, se = "cluster"),
+    "subjective" = feols(data = tempdata, 
+                         trust~sex+age+edu+emp+round+subcome|country, se = "cluster"),
+    "both" = feols(data = tempdata, 
+                   trust~sex+age+edu+emp+round+relcome+subcome|country, se = "cluster")
+  ),
+  fmt = 2,
+  stars = T,
+  title = paste(rlist[2,]),
+  
+)
+
+left_join(contdata, whoregions) %>% 
+  filter(region == paste(rlist[3,])) %>% 
+  mutate(trust = (trust-mean(trust, na.rm = T))/sd(trust, na.rm = T)) %>% 
+  mutate(jointcome = (relcome + subcome)/2) -> tempdata
+
+modelsummary::modelsummary(
+  models = list(
+    "relative" = feols(data = tempdata, 
+                       trust~sex+age+edu+emp+round+relcome|country, se = "cluster"),
+    "subjective" = feols(data = tempdata, 
+                         trust~sex+age+edu+emp+round+subcome|country, se = "cluster"),
+    "both" = feols(data = tempdata, 
+                   trust~sex+age+edu+emp+round+relcome+subcome|country, se = "cluster")
+  ),
+  fmt = 2,
+  stars = T,
+  title = paste(rlist[3,]),
+  
+)
+
+left_join(contdata, whoregions) %>% 
+  filter(region == paste(rlist[4,])) %>% 
+  mutate(trust = (trust-mean(trust, na.rm = T))/sd(trust, na.rm = T)) %>% 
+  mutate(jointcome = (relcome + subcome)/2) -> tempdata
+
+modelsummary::modelsummary(
+  models = list(
+    "relative" = feols(data = tempdata, 
+                       trust~sex+age+edu+emp+round+relcome|country, se = "cluster"),
+    "subjective" = feols(data = tempdata, 
+                         trust~sex+age+edu+emp+round+subcome|country, se = "cluster"),
+    "both" = feols(data = tempdata, 
+                   trust~sex+age+edu+emp+round+relcome+subcome|country, se = "cluster")
+  ),
+  fmt = 2,
+  stars = T,
+  title = paste(rlist[4,]),
+  
+)
+
+left_join(contdata, whoregions) %>% 
+  filter(region == paste(rlist[5,])) %>% 
+  mutate(trust = (trust-mean(trust, na.rm = T))/sd(trust, na.rm = T)) %>% 
+  mutate(jointcome = (relcome + subcome)/2) -> tempdata
+
+modelsummary::modelsummary(
+  models = list(
+    "relative" = feols(data = tempdata, 
+                       trust~sex+age+edu+emp+round+relcome|country, se = "cluster"),
+    "subjective" = feols(data = tempdata, 
+                         trust~sex+age+edu+emp+round+subcome|country, se = "cluster"),
+    "both" = feols(data = tempdata, 
+                   trust~sex+age+edu+emp+round+relcome+subcome|country, se = "cluster")
+  ),
+  fmt = 2,
+  stars = T,
+  title = paste(rlist[5,]),
+  
+)
+
+left_join(contdata, whoregions) %>% 
+  filter(region == paste(rlist[6,])) %>% 
+  mutate(trust = (trust-mean(trust, na.rm = T))/sd(trust, na.rm = T)) %>% 
+  mutate(jointcome = (relcome + subcome)/2) -> tempdata
+
+modelsummary::modelsummary(
+  models = list(
+    "relative" = feols(data = tempdata, 
+                       trust~sex+age+edu+emp+round+relcome|country, se = "cluster"),
+    "subjective" = feols(data = tempdata, 
+                         trust~sex+age+edu+emp+round+subcome|country, se = "cluster"),
+    "both" = feols(data = tempdata, 
+                   trust~sex+age+edu+emp+round+relcome+subcome|country, se = "cluster")
+  ),
+  fmt = 2,
+  stars = T,
+  title = paste(rlist[6,]),
+  
+)
+
+```
+
+# Estimates from country-wise regressions
+
+```{r country wise regressions}
+
+cregs %>% 
+  filter(term == "relcome") %>% 
+  select(-term) %>% 
+  kable(caption = "Relative Income") %>%
+  kable_styling(full_width = FALSE, position = "float_left")
+
+cregs %>% 
+  filter(term == "subcome") %>% 
+  select(-term) %>% 
+  kable(caption = "Subjective Income") %>%
+  kable_styling(full_width = FALSE, position = "left")
+```
+
+# Mixed effects country level moderation
+
+```{r moderation mixed effects 1}
+modelsummary::modelsummary(
+  models = list(
+    "aggr trust" = lv2aggrrel,
+    "scispend" = lv2spenrel,
+    "gdppc" = lv2gdprel,
+    "gini" = lv2ginirel,
+    "democracy" = lv2demrel,
+    "chldmort" = lv2mortrel
+  ),
+  fmt = 2,
+  stars = T,
+  title = "Relative income",
+  
+)
+
+modelsummary::modelsummary(
+  models = list(
+    "aggr trust" = lv2aggrsub,
+    "scispend" = lv2spensub,
+    "gdppc" = lv2gdpsub,
+    "gini" = lv2ginisub,
+    "democracy" = lv2demsub,
+    "chldmort" = lv2mortsub
+  ),
+  fmt = 2,
+  stars = T,
+  title = "Subjective income",
+  
+)
+```
+
+# individual level moderators
+
+```{r individual level moderators}
+
+left_join(contdata, whoregions) %>% 
+  mutate(trust = (trust-mean(trust, na.rm = T))/sd(trust, na.rm = T)) -> tempdata
+
+modelsummary(
+  models = list(
+    "sex" = feols(data = tempdata, 
+                       trust~relcome*sex+age+edu+emp+round|country, se = "cluster"),
+    "sex" = feols(data = tempdata, 
+                       trust~subcome*sex+age+edu+emp+round|country, se = "cluster"),
+    "age" = feols(data = tempdata, 
+                       trust~sex+relcome*age+edu+emp+round|country, se = "cluster"),
+    "age" = feols(data = tempdata, 
+                       trust~sex+subcome*age+edu+emp+round|country, se = "cluster"),
+    "Round" = feols(data = tempdata, 
+                       trust~sex+age+edu+emp+relcome*round|country, se = "cluster"),
+    "Round" = feols(data = tempdata, 
+                       trust~sex+age+edu+emp+subcome*round|country, se = "cluster")
+  ),
+  fmt = 2,
+  stars = T,
+  title = "first",
+  
+)
+
+modelsummary(
+  models = list(
+    
+    
+    "Employment" = feols(data = tempdata, 
+                       trust~sex+age+edu+subcome*emp+round|country, se = "cluster"),
+    "Employment" = feols(data = tempdata, 
+                       trust~sex+age+edu+relcome*emp+round|country, se = "cluster"),
+    "Education" = feols(data = tempdata, 
+                       trust~sex+age+subcome*edu+emp+round|country, se = "cluster"),
+    "Education" = feols(data = tempdata, 
+                       trust~sex+age+relcome*edu+emp+round|country, se = "cluster"),
+    "Science efficacy" = feols(data = tempdata, 
+                       trust~sex+age+edu+emp+round+subcome*scieff|country, se = "cluster"),
+    "Science efficacy" = feols(data = tempdata, 
+                       trust~sex+age+edu+emp+round+relcome*scieff|country, se = "cluster")
+  ),
+  fmt = 2,
+  stars = T,
+  title = "Second",
+  
+)
+
+
+modelsummary(
+  models = list(
+    "Trust neighbourhood" = feols(data = tempdata, 
+                       trust~sex+age+edu+emp+round+subcome*ntrust|country, se = "cluster"),
+    "Trust neighbourhood" = feols(data = tempdata, 
+                       trust~sex+age+edu+emp+round+relcome*ntrust|country, se = "cluster"),
+    "Trust government" = feols(data = tempdata, 
+                       trust~sex+age+edu+emp+round+subcome*gtrust|country, se = "cluster"),
+    "Trust government" = feols(data = tempdata, 
+                       trust~sex+age+edu+emp+round+relcome*gtrust|country, se = "cluster")
+  ),
+  fmt = 2,
+  stars = T,
+  title = "Third",
+  
+)
+
+
+```
+
+```{r split samples per region, fig.width=10, fig.height=12}
+
+indregio %>% 
+  mutate(
+    est = estimate/sd(contdata$trust, na.rm = T),
+    se = std.error/sd(contdata$trust, na.rm = T),
+    term = case_when(
+      term == "relcome" ~ "Relative\nIncome",
+      term == "subcome" ~ "Subjective\nIncome"
+    ),
+    term = fct_rev(term),
+    var = fct_inorder(var),
+    value = fct_inorder(value),
+    value = fct_relevel(value, "Not at all")
+  ) %>% 
+  
+  ggplot(
+    aes(y = est, x = value, color = term, ymin = est-1.96*se, ymax = est+1.96*se)
+  ) +
+  geom_pointrange(position = position_dodge(.3)) +
+  geom_hline(yintercept = 0) +
+  
+  xlab("") +
+  ylab("Regression coefficient") +
+  facet_grid(region~var, scales = "free_x", space = "free_x") +
+  jtools::theme_nice(legend.pos = "top") +
+  theme(
+    panel.grid.major.x = element_blank(),
+    axis.text.x = element_text(angle = 90, hjust = 1),
+    panel.spacing.x = unit(.6, "cm"),
+    legend.title = element_blank()
+  ) +
+  scale_color_manual(values = aucolr::picker(c("red", "blue")))
+
+```
+
+
+
+
+
